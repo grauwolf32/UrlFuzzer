@@ -34,13 +34,13 @@ class Processor():
         self.cc_conn = cc_conn
         self.local_conn = local_conn
         
-        self.job_status = set(self.invited_clients)
+        self.job_status = set(self.connected_clients)
         self.cc_sender = Sender(cc_conn,settings.CC_EXCHANGE)
         self.local_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
 
-        self.cc_receiver = Receiver(cc_conn,settings.CC_EXCHANGE,settings.CC_QUEUE,["task"],dispatch_task)
-        self.local_receiver = Receiver(local_conn,settings.LOCAL_EXCHANGE,settings.LOCAL_QUEUE,["result"],dispatch_result)
-        self.local_supervisor = Receiver(local_conn,settings.LOCAL_EXCHANGE,settings.LOCAL_QUEUE,["job_done","keep-alive"],supervisor)
+        self.cc_receiver = Receiver(cc_conn,settings.CC_EXCHANGE,settings.CC_QUEUE,["task"],self.dispatch_task)
+        self.local_receiver = Receiver(local_conn,settings.LOCAL_EXCHANGE,settings.LOCAL_QUEUE,["result"],self.dispatch_result)
+        self.local_supervisor = Receiver(local_conn,settings.LOCAL_EXCHANGE,settings.LOCAL_QUEUE,["job_done","keep-alive"],self.supervisor)
 
     def supervisor(self, receiver, message):
         message = json.loads(message)
@@ -102,7 +102,7 @@ class Processor():
             self.task_results[task_id][task_lang] = res["result"]
             return
 
-        if key_error != True:
+        if key_error == False:
             for lang in self.task_results[task_id]:
                 for key in res["result"]:
                     if self.task_results[task_id][lang][key] != res["result"][key]:
@@ -128,8 +128,9 @@ class Processor():
         return
 
 def main():
+    invited_clients = ["python","java","ruby","go"]
+    p = Processor(cc_conn=cc_conn,local_conn = local_conn,connected_clients=invited_clients)
     print "Stub"
-    #invited_clients = ["python","java","ruby","go"]
     #invite_receiver = Receiver(conn=self.local_conn,
     #invite_receiver.start()
     #invite_receiver.join(60)
