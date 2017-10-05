@@ -2,6 +2,7 @@ import pika
 import threading
 import settings
 import json
+import time
 
 from amqp_conn import Receiver, Sender
 
@@ -14,6 +15,12 @@ class PyClient():
         self.sender = Sender(conn,settings.LOCAL_EXCHANGE)
         #self.receiver = Receiver(
         self.sender.send_message(routing_key="client_identification",message='{"client":"python"}')
+        self.keep_alive()
+
+    def keep_alive(self):
+        threading.Timer(settings.HEARTBEAT_TIME, self.keep_alive).start()
+        self.sender.send_message(routing_key="keep-alive",
+                         message='{"client":"python","message_type":"keep-alive"}')
 
     def process_result(self, receiver, delivery_tag, message):
         pass

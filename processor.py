@@ -2,6 +2,7 @@ import pika
 import threading
 import json
 import time
+import signal
 import settings 
 
 from amqp_conn import Receiver, Sender
@@ -11,12 +12,13 @@ cc_conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=cc_cred,
 
 local_cred = pika.PlainCredentials(settings.LOCAL_USER, settings.LOCAL_PASSWD)
 local_conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=local_cred,host=settings.LOCAL_IP))
+sv_conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=local_cred,host=settings.LOCAL_IP))
 
 class ClientsNotReady(Exception):
     pass
 
 class Processor():
-    def __init__(self, cc_conn,local_conn,connected_clients):
+    def __init__(self, cc_conn,local_conn,sv_conn, connected_clients):
         self.reported_ids = set()
         self.task_results = dict()
         self.tasks = dict()
@@ -40,13 +42,33 @@ class Processor():
 
         self.cc_receiver = Receiver(cc_conn,settings.CC_EXCHANGE,settings.CC_QUEUE,["task"],self.dispatch_task)
         self.local_receiver = Receiver(local_conn,settings.LOCAL_EXCHANGE,settings.LOCAL_QUEUE,["result"],self.dispatch_result)
-        self.local_supervisor = Receiver(local_conn,settings.LOCAL_EXCHANGE,settings.LOCAL_QUEUE,["job_done","keep-alive"],self.supervisor)
+        self.local_supervisor = Receiver(sv_conn,settings.LOCAL_EXCHANGE,settings.LOCAL_HEARTBEAT_QUEUE,["job_done","keep-alive"],self.supervisor)
+    
+    def start(self):
+        self.cc_receiver.start()
+        self.local_receiver.start()
+        self.local_supervisor.start()
+
+    def stop(self):
+        if self.cc_receiver.ch.is_open:
+            self.cc_receiver.stop_consuming()
+        self.cc_receiver.join()
+        
+        if self.local_receiver.ch.is_open:
+            self.local_receiver.stop_consuming()
+        self.local_receiver.join()
+        
+        if self.local_supervisor.ch.is_open:
+            self.local_supervisor.stop_consuming()
+        self.local_supervisor.join()
 
     def supervisor(self, receiver, delivery_tag, message):
         message = json.loads(message)
-        client = message["client_name"]
+        client = message["client"]
         message_type = message["message_type"]
-        
+
+        receiver.ch.basic_ack(delivery_tag = delivery_tag)
+
         if message_type == "job_done":
             try:
                 self.job_status.remove(client)
@@ -58,6 +80,7 @@ class Processor():
             return 
 
         if message_type == "keep-alive":
+            print "Got keep-alive from {0}".format(client)
             current_time = time.time()
             self.heartbeat[client] = current_time
         
@@ -137,14 +160,15 @@ def invite_clients(receiver, delivery_tag, message):
 def main():
     invite_receiver = Receiver(conn=local_conn,
 			       exch=settings.LOCAL_EXCHANGE,
-                               queue=settings.LOCAL_QUEUE,
+                               queue=settings.LOCAL_HEARTBEAT_QUEUE,
                                bindings=["client_identification"],
                                cb_func=invite_clients)
     invite_receiver.start()
     invite_receiver.join()
     
     print connected_clients
-    p = Processor(cc_conn=cc_conn,local_conn = local_conn,connected_clients=connected_clients)
+    p = Processor(cc_conn=cc_conn,sv_conn=sv_conn,local_conn = local_conn,connected_clients=connected_clients)
+    p.start()
     print "Stub"
     #invite_receiver.start()
     #invite_receiver.join(60)
