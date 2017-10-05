@@ -22,7 +22,7 @@ class Processor():
         self.tasks = dict()
         self.task_callbacks = []
 
-        self.connected_clients = set(connected_clients)
+        self.connected_clients = connected_clients
         self.n_clients = len(connected_clients)
         self.heartbeat = dict()
 
@@ -34,7 +34,7 @@ class Processor():
         self.cc_conn = cc_conn
         self.local_conn = local_conn
         
-        self.job_status = set(self.connected_clients)
+        self.job_status = self.connected_clients
         self.cc_sender = Sender(cc_conn,settings.CC_EXCHANGE)
         self.local_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
 
@@ -42,7 +42,7 @@ class Processor():
         self.local_receiver = Receiver(local_conn,settings.LOCAL_EXCHANGE,settings.LOCAL_QUEUE,["result"],self.dispatch_result)
         self.local_supervisor = Receiver(local_conn,settings.LOCAL_EXCHANGE,settings.LOCAL_QUEUE,["job_done","keep-alive"],self.supervisor)
 
-    def supervisor(self, receiver, message):
+    def supervisor(self, receiver, delivery_tag, message):
         message = json.loads(message)
         client = message["client_name"]
         message_type = message["message_type"]
@@ -65,15 +65,8 @@ class Processor():
         self.reported_ids.clear()
         self.task_results.clear()
         self.tasks.clear()
-    
-    def invite_clients(self, receiver, message):
-        client = json.loads(message)["client_name"]
-        self.connected_clients.add(client)
 
-        if self.invited_clients.issubset(self.connected_clients):
-            receiver.ch.stop_consuming()
-
-    def dispatch_result(self,receiver,result):
+    def dispatch_result(self,receiver,delivery_tag, result):
         res = json.loads(result)
         task_id = res["task_id"]
         task_lang = res["lang"]
@@ -112,7 +105,7 @@ class Processor():
             self.task_results[task_id][task_lang] = res["result"]
         return
 
-    def dispatch_task(self, receiver, task):
+    def dispatch_task(self, receiver, delivery_tag, task):
         task_ = json.loads(task)
         self.tasks = task_["tasks"]
 
@@ -127,11 +120,32 @@ class Processor():
 
         return
 
+invited_clients = set(["python"])
+connected_clients = set(["python"])
+
+def invite_clients(receiver, delivery_tag, message):
+    client = json.loads(message)["client"]
+    if client in invited_clients:
+        print "Client {0} accept the invitation!".format(client)
+        invited_clients.remove(client)
+        if len(invited_clients) == 0:
+            receiver.ch.stop_consuming()
+            print "All clients have been connected!"
+    receiver.ch.basic_ack(delivery_tag = delivery_tag)
+                
+
 def main():
-    invited_clients = ["python","java","ruby","go"]
-    p = Processor(cc_conn=cc_conn,local_conn = local_conn,connected_clients=invited_clients)
+    invite_receiver = Receiver(conn=local_conn,
+			       exch=settings.LOCAL_EXCHANGE,
+                               queue=settings.LOCAL_QUEUE,
+                               bindings=["client_identification"],
+                               cb_func=invite_clients)
+    invite_receiver.start()
+    invite_receiver.join()
+    
+    print connected_clients
+    p = Processor(cc_conn=cc_conn,local_conn = local_conn,connected_clients=connected_clients)
     print "Stub"
-    #invite_receiver = Receiver(conn=self.local_conn,
     #invite_receiver.start()
     #invite_receiver.join(60)
 

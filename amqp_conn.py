@@ -22,7 +22,7 @@ class Receiver(threading.Thread):
         self.ch.basic_consume(self.callback, queue=self.queue)
 
     def callback(self, ch, method, properties, body):
-        return self.cb_func(self, body)
+        return self.cb_func(self,method.delivery_tag,body)
 
     def run(self):
         self.ch.start_consuming()
