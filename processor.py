@@ -101,6 +101,8 @@ class Processor():
             key_error = True
             self.task_results[task_id] = dict()
 
+        receiver.ch.basic_ack(delivery_tag = delivery_tag)
+
         if res["error"] == "1":
             self.reported_ids.add(task_id)
             try:
@@ -139,9 +141,10 @@ class Processor():
             self.local_sender.basic_publish(
 				exchange=settings.LOCAL_EXCHANGE,
 			        routing_key="task", 
-                                body=self.tasks[task_id])
+                                body='{"{0}":"{1}"}'.format(task_id,self.tasks[task_id]))
 
         return
+
 
 invited_clients = set(["python"])
 connected_clients = set(["python"])
@@ -164,21 +167,19 @@ def main():
                                bindings=["client_identification"],
                                cb_func=invite_clients)
     invite_receiver.start()
-    invite_receiver.join()
+    invite_receiver.join(15)
+
+    if len(invited_clients) > 0:
+        raise ClientsNotReady
     
-    print connected_clients
     p = Processor(cc_conn=cc_conn,sv_conn=sv_conn,local_conn = local_conn,connected_clients=connected_clients)
     p.start()
+
+    stub_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
+    task = dict()
+    task["task_id"] = "12345"
+    task["task"] = "http://example.com"
     print "Stub"
-    #invite_receiver.start()
-    #invite_receiver.join(60)
-
-    #if  not self.invited_client.issubset(self.connected_clients):
-    #    raise ClientsNotReady
-
-    #connected_clients = 
-    #proc = Processor(cc_conn,local_conn,invited_clients)
-    #proc.start()
 
 if __name__=="__main__":
     main()
@@ -189,6 +190,7 @@ if __name__=="__main__":
 #    sys.exit(0)
 
 #signal.signal(signal.SIGINT, signal_handler)
+# ps -ax  | grep processor.py | cut -d " " -f1| xargs -I {} kill -9 {}
 
 
         
