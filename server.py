@@ -13,6 +13,9 @@ class Server():
         self.sender = Sender(conn,settings.CC_EXCHANGE)
         self.receiver = Receiver(conn,settings.CC_EXCHANGE,settings.CC_QUEUE, ["task_result"], self.on_result)
         self.task_counter = 0
+
+    def start():
+        self.receiver.start()
     
     def on_result(self, receiver, message):
         receiver.ch.basic_ack(delivery_tag = delivery_tag)
@@ -38,6 +41,7 @@ class Server():
 
 def main()
     s = Server()
+    s.start()
     tasks = ["http://example.com","https://google.com"]
     s.send_tasks(tasks,list(xrange(0,len(tasks)))
 
