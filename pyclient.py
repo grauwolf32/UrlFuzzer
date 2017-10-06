@@ -47,14 +47,14 @@ class PyClient():
         self.conn = conn
         self.client = client_name
         self.sender = Sender(conn,settings.LOCAL_EXCHANGE)
-        self.receiver = Receiver(local_conn,settings.LOCAL_EXCHANGE,queue,["task"],self.process_result)
-        self.sender.send_message(routing_key="client_identification",message='{"client":"{0}"}'.format(self.client))
-        self.keep_alive()
+        self.receiver = Receiver(conn,settings.LOCAL_EXCHANGE,queue,["task"],self.process_result)
+        self.sender.send_message(routing_key="client_identification",message='{"client":"%s"}'%(self.client))
+       # self.keep_alive()
 
     def keep_alive(self):
         threading.Timer(settings.HEARTBEAT_TIME, self.keep_alive).start()
         self.sender.send_message(routing_key="keep-alive",
-                         message='{"client":"{0}","message_type":"keep-alive"}'.format(self.client))
+                         message='{"client":"%s","message_type":"keep-alive"}'% (self.client))
 
     def process_result(self, receiver, delivery_tag, message):
         task = json.loads(message)
@@ -77,18 +77,19 @@ class PyClient():
             result = ""
 
         task_result["result"] = result
-        self.sender.send_message(routing_key="result",json.dumps(task_result))
+        self.sender.send_message(routing_key="result",message=json.dumps(task_result))
         receiver.ch.basic_ack(delivery_tag = delivery_tag)
 
         
-    def do_task(task):
-        parse_result = urlparse(url)
+    def do_task(self,task):
+        parse_result = urlparse(task)
         task_result  = dump_result(parse_result)
         return task_result
 
 def main():
     pycl = PyClient(conn,"python","python_queue")
-
+    #task_result = pycl.do_task("http://example.com.ru:80:80/aaa/?tttt&x=11")
+    #print json.dumps(task_result)
 
 if __name__== "__main__":
     main()

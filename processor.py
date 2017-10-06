@@ -175,10 +175,10 @@ def main():
     p = Processor(cc_conn=cc_conn,sv_conn=sv_conn,local_conn = local_conn,connected_clients=connected_clients)
     p.start()
 
-    stub_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
-    task = dict()
-    task["task_id"] = "12345"
-    task["task"] = "http://example.com"
+    #stub_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
+    #task = dict()
+    #task["task_id"] = "12345"
+    #task["task"] = "http://example.com"
     print "Stub"
 
 if __name__=="__main__":
