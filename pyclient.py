@@ -46,9 +46,13 @@ class PyClient():
     def __init__(self, conn,client_name,queue):
         self.conn = conn
         self.client = client_name
+
         self.sender = Sender(conn,settings.LOCAL_EXCHANGE)
-        self.receiver = Receiver(conn,settings.LOCAL_EXCHANGE,queue,["task"],self.process_result)
-        self.sender.send_message(routing_key="client_identification",message='{"client":"%s"}'%(self.client))
+
+        self.receiver = Receiver(conn,settings.LOCAL_EXCHANGE,queue)
+        self.receiver.add_listener(self.process_result,["task"])
+
+        self.sender.send_message(routing_key="client-id",message='{"client":"%s"}'%(self.client))
        # self.keep_alive()
 
     def keep_alive(self):

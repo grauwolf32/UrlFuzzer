@@ -3,26 +3,55 @@ import threading
 import json
 
 class Receiver(threading.Thread):
-    def __init__(self,conn,exch,queue,bindings,cb_func,exch_type="direct",pc=1):
+    def __init__(self,conn,exch,queue,exch_type="direct",prefetch_count=1):
         super(Receiver,self).__init__()      
 
         self.conn = conn
         self.exch = exch
         self.queue = queue
+        self.listeners = dict()
 
         self.ch = self.conn.channel()
         self.ch.exchange_declare(exchange=self.exch,exchange_type=exch_type)
         self.ch.queue_declare(queue=self.queue)
 
-        self.ch.basic_qos(prefetch_count=pc)
-        self.cb_func = cb_func
-        for binding in bindings:
-            self.ch.queue_bind(exchange=self.exch, queue=self.queue, routing_key=binding)
-
+        self.ch.basic_qos(prefetch_count=prefetch_count)
         self.ch.basic_consume(self.callback, queue=self.queue)
 
     def callback(self, ch, method, properties, body):
-        return self.cb_func(self,method.delivery_tag,body)
+        listeners = []
+        try:
+            listeners = self.listeners[method.routing_key]
+        except KeyError:
+            pass
+  
+        if len(listeners) == 0:
+            return
+
+        for listener in listeners:   
+            try:
+                listener(self, method, body)
+            except:
+                pass #TODO Add logs
+
+        self.ch.basic_ack(delivery_tag = method.delivery_tag)
+        
+        return 
+
+    def add_listener(self, callback, routing_keys):
+        existing_bindings = set(self.listeners.keys())
+
+        for routing_key in routing_keys:
+            if routing_key in existing_bindings:
+                self.listeners[routing_key].add(callback)
+            else:
+                self.listeners[routing_key] = [callback]
+                self.ch.queue_bind(exchange=self.exch, 
+				        queue=self.queue, 
+			                   routing_key=routing_key)
+        return
+                
+        
 
     def run(self):
         self.ch.start_consuming()

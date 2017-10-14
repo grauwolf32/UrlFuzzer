@@ -11,7 +11,8 @@ class Server():
     def __init__(self,conn):
         self.conn = conn
         self.sender = Sender(conn,settings.CC_EXCHANGE)
-        self.receiver = Receiver(conn,settings.CC_EXCHANGE,settings.CC_QUEUE, ["task_result"], self.on_result)
+        self.receiver = Receiver(conn,settings.CC_EXCHANGE,settings.CC_QUEUE)
+        self.receiver.add_listener(self.on_result,["task_result"])
         self.task_counter = 0
 
     def start():

@@ -12,17 +12,15 @@ cc_conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=cc_cred,
 
 local_cred = pika.PlainCredentials(settings.LOCAL_USER, settings.LOCAL_PASSWD)
 local_conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=local_cred,host=settings.LOCAL_IP))
-sv_conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=local_cred,host=settings.LOCAL_IP))
 
 class ClientsNotReady(Exception):
     pass
 
 class Processor():
-    def __init__(self, cc_conn,local_conn,sv_conn, connected_clients):
+    def __init__(self, cc_conn,local_conn, connected_clients):
         self.reported_ids = set()
         self.task_results = dict()
         self.tasks = dict()
-        self.task_callbacks = []
 
         self.connected_clients = connected_clients
         self.n_clients = len(connected_clients)
@@ -30,6 +28,7 @@ class Processor():
 
         self.time_start = time.time()
         self.heartbeat["supervisor"] = self.time_start
+
         for client in self.connected_clients:
            self.heartbeat[client] = self.time_start
 
@@ -40,14 +39,22 @@ class Processor():
         self.cc_sender = Sender(cc_conn,settings.CC_EXCHANGE)
         self.local_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
 
-        self.cc_receiver = Receiver(cc_conn,settings.CC_EXCHANGE,settings.CC_QUEUE,["task"],self.dispatch_task)
-        self.local_receiver = Receiver(local_conn,settings.LOCAL_EXCHANGE,settings.LOCAL_QUEUE,["result"],self.dispatch_result)
-        self.local_supervisor = Receiver(sv_conn,settings.LOCAL_EXCHANGE,settings.LOCAL_HEARTBEAT_QUEUE,["job_done","keep-alive"],self.supervisor)
+        self.cc_receiver = Receiver(conn = cc_conn,
+                                       exch = settings.CC_EXCHANGE,
+                                            queue = settings.CC_QUEUE)
+
+        self.cc_receiver.add_listener(self.dispatch_task,["task"])
+
+        self.local_receiver = Receiver(conn = local_conn,
+                                           exch = settings.LOCAL_EXCHANGE,
+                                               queue = settings.LOCAL_QUEUE)
+
+        self.local_receiver.add_listener(self.dispatch_result,["result"])
+        self.local_receiver.add_listener(self.supervisor,["job-done","keep-alive","client-id"])
     
     def start(self):
         self.cc_receiver.start()
         self.local_receiver.start()
-        self.local_supervisor.start()
 
     def stop(self):
         if self.cc_receiver.ch.is_open:
@@ -57,19 +64,12 @@ class Processor():
         if self.local_receiver.ch.is_open:
             self.local_receiver.stop_consuming()
         self.local_receiver.join()
-        
-        if self.local_supervisor.ch.is_open:
-            self.local_supervisor.stop_consuming()
-        self.local_supervisor.join()
 
-    def supervisor(self, receiver, delivery_tag, message):
+    def supervisor(self, receiver, method, message): #TODO Refactoring !!!!
         message = json.loads(message)
         client = message["client"]
-        message_type = message["message_type"]
 
-        receiver.ch.basic_ack(delivery_tag = delivery_tag)
-
-        if message_type == "job_done":
+        if method.routing_key == "job-done":
             try:
                 self.job_status.remove(client)
             except:
@@ -79,17 +79,21 @@ class Processor():
                 self.send_report()
             return 
 
-        if message_type == "keep-alive":
+        if method.routing_key == "keep-alive":
             print "Got keep-alive from {0}".format(client)
             current_time = time.time()
             self.heartbeat[client] = current_time
+            return
+
+        if method.routing_key == "client-id":
+            return
         
     def send_report(self):
         self.reported_ids.clear()
         self.task_results.clear()
         self.tasks.clear()
 
-    def dispatch_result(self,receiver,delivery_tag, result):
+    def dispatch_result(self,receiver,method, result):
         res = json.loads(result)
         task_id = res["task_id"]
         task_lang = res["lang"]
@@ -100,8 +104,6 @@ class Processor():
         except KeyError:
             key_error = True
             self.task_results[task_id] = dict()
-
-        receiver.ch.basic_ack(delivery_tag = delivery_tag)
 
         if res["error"] == "1":
             self.reported_ids.add(task_id)
@@ -130,18 +132,18 @@ class Processor():
             self.task_results[task_id][task_lang] = res["result"]
         return
 
-    def dispatch_task(self, receiver, delivery_tag, task):
-        task_ = json.loads(task)
-        self.tasks = task_["tasks"]
+    def dispatch_task(self, receiver, method, message):
+        task = json.loads(message)
+        self.tasks = task["tasks"]
 
-        for task_id in task_["reported_ids"]:
+        for task_id in task["reported_ids"]:
             self.reported_ids.add(task_id)
     
         for task_id in tasks:
             self.local_sender.basic_publish(
-				exchange=settings.LOCAL_EXCHANGE,
-			        routing_key="task", 
-                                body='{"{0}":"{1}"}'.format(task_id,self.tasks[task_id]))
+                                routing_key = "task", 
+				    exchange = settings.LOCAL_EXCHANGE,
+                                        body = '{"{0}":"{1}"}'.format(task_id,self.tasks[task_id]))
 
         return
 
@@ -157,22 +159,21 @@ def invite_clients(receiver, delivery_tag, message):
         if len(invited_clients) == 0:
             receiver.ch.stop_consuming()
             print "All clients have been connected!"
-    receiver.ch.basic_ack(delivery_tag = delivery_tag)
-                
+
 
 def main():
     invite_receiver = Receiver(conn=local_conn,
-			       exch=settings.LOCAL_EXCHANGE,
-                               queue=settings.LOCAL_HEARTBEAT_QUEUE,
-                               bindings=["client_identification"],
-                               cb_func=invite_clients)
+			           exch=settings.LOCAL_EXCHANGE,
+                                       queue=settings.LOCAL_QUEUE)
+
+    invite_receiver.add_listener(invite_clients,["client-id"])
     invite_receiver.start()
-    invite_receiver.join(15)
+    invite_receiver.join(180)
 
     if len(invited_clients) > 0:
         raise ClientsNotReady
     
-    p = Processor(cc_conn=cc_conn,sv_conn=sv_conn,local_conn = local_conn,connected_clients=connected_clients)
+    p = Processor(cc_conn=cc_conn,local_conn = local_conn,connected_clients=connected_clients)
     p.start()
 
     #stub_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
