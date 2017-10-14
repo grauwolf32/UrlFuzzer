@@ -19,7 +19,6 @@ class Server():
         self.receiver.start()
     
     def on_result(self, receiver, message):
-        receiver.ch.basic_ack(delivery_tag = delivery_tag)
         print message
     
     
@@ -41,7 +40,7 @@ class Server():
 
 
 def main()
-    s = Server()
+    s = Server(conn)
     s.start()
     tasks = ["http://example.com","https://google.com"]
     s.send_tasks(tasks,list(xrange(0,len(tasks)))
