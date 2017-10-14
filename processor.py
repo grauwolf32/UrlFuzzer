@@ -37,6 +37,8 @@ class Processor():
         
         self.job_status = self.connected_clients
         self.cc_sender = Sender(cc_conn,settings.CC_EXCHANGE)
+        self.cc_sender.send_message(routing_key="task_result", message="huipizda")
+
         self.local_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
 
         self.cc_receiver = Receiver(conn = cc_conn,
@@ -181,7 +183,7 @@ def main():
     #task["task_id"] = "12345"
     #task["task"] = "http://example.com"
     print "Stub"
-
+    print p.tasks
 if __name__=="__main__":
     main()
     

@@ -4,6 +4,8 @@ import settings
 import json
 import time
 
+from amqp_conn import Receiver, Sender
+
 cred = pika.PlainCredentials(settings.CC_USER, settings.CC_PASSWD)
 conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=cred,host=settings.LOCAL_IP))
 
@@ -15,7 +17,7 @@ class Server():
         self.receiver.add_listener(self.on_result,["task_result"])
         self.task_counter = 0
 
-    def start():
+    def start(self):
         self.receiver.start()
     
     def on_result(self, receiver, message):
@@ -39,11 +41,11 @@ class Server():
         self.sender.send_message(routing_key="task",message=json.dumps(message))
 
 
-def main()
+def main():
     s = Server(conn)
     s.start()
     tasks = ["http://example.com","https://google.com"]
-    s.send_tasks(tasks,list(xrange(0,len(tasks)))
+    s.send_tasks(tasks,list(xrange(0,len(tasks))))
 
 if __name__== "__main__":
     main()  

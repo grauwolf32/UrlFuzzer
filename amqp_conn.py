@@ -19,6 +19,9 @@ class Receiver(threading.Thread):
         self.ch.basic_consume(self.callback, queue=self.queue)
 
     def callback(self, ch, method, properties, body):
+        print method.routing_key
+        print body 
+
         listeners = []
         try:
             listeners = self.listeners[method.routing_key]
