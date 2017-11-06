@@ -135,6 +135,8 @@ class Processor():
         return
 
     def dispatch_task(self, receiver, method, message):
+        print "Task dipatched\n{0}".format(message)
+
         task = json.loads(message)
         self.tasks = task["tasks"]
 

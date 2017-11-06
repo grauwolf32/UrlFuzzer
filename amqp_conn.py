@@ -19,9 +19,6 @@ class Receiver(threading.Thread):
         self.ch.basic_consume(self.callback, queue=self.queue)
 
     def callback(self, ch, method, properties, body):
-        print method.routing_key
-        print body 
-
         listeners = []
         try:
             listeners = self.listeners[method.routing_key]
@@ -61,7 +58,7 @@ class Receiver(threading.Thread):
 
 
 class Sender():
-    def __init__(self,conn,exch,exch_type="direct"):
+    def __init__(self, conn,exch, exch_type="direct"):
         self.conn = conn
         self.exch = exch
 

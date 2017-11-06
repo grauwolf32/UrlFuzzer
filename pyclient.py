@@ -52,14 +52,18 @@ class PyClient():
         self.receiver.add_listener(self.process_result,["task"])
 
         self.sender.send_message(routing_key="client-id",message='{"client":"%s"}'%(self.client))
-       # self.keep_alive()
+        self.keep_alive()
 
     def keep_alive(self):
         threading.Timer(settings.HEARTBEAT_TIME, self.keep_alive).start()
         self.sender.send_message(routing_key="keep-alive",
                          message='{"client":"%s","message_type":"keep-alive"}'% (self.client))
+    def start(self):
+        self.receiver.start()
 
     def process_result(self, receiver, delivery_tag, message):
+        print "Got task: {0}".format(message)
+
         task = json.loads(message)
         
         task_id = task.keys[0]
@@ -90,7 +94,9 @@ class PyClient():
         return task_result
 
 def main():
-    pycl = PyClient(conn,"python","python_queue")
+    client = PyClient(conn,"python","python_queue")
+    client.start()
+
     #task_result = pycl.do_task("http://example.com.ru:80:80/aaa/?tttt&x=11")
     #print json.dumps(task_result)
 
