@@ -121,12 +121,22 @@ class ClientManager():
                     del self.connected_clients[client_id]
                     print "Client {0} wasn't respond and has been kicked up".format(client_id)
 
-    def await_clients(self, client_names):
+    def await_clients(self, client_names, timeout=100.0):
         client_names = set(client_names)
         active_clients = set([self.connected_clients[i]["client_name"] for i in self.active_clients])
 
-        while not client_names.issubset(active_clients):
+        while not client_names.issubset(active_clients) and timeout > 0:
             active_clients = set([self.connected_clients[i]["client_name"] for i in self.active_clients])
+            timeout -= 1
             time.sleep(1)
+
+        if  client_names.issubset(active_clients):
+            return True
         
-        return
+        print "Awaiting for clients has been canceled due timeout!"
+	print "These clients hasn't connected yet:"
+
+        for client_name in client_names.difference(active_clients):
+            print client_name
+
+        return False

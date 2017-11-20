@@ -87,6 +87,11 @@ class Client():
         }
 
         self.sender.send_message(routing_key="keepalive", message=json.dumps(response))
+
+    def kill(self):
+        if self.receiver.ch.is_open:
+            self.receiver.stop_consuming()
+        self.receiver.join()
             
                         
         

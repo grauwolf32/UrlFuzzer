@@ -7,6 +7,7 @@ import settings
 
 from amqp_conn import Receiver, Sender
 from client_manager import ClientManager
+from client import Client
 
 cc_cred = pika.PlainCredentials(settings.CC_USER, settings.CC_PASSWD)
 cc_conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=cc_cred,host=settings.CC_IP))
@@ -17,92 +18,68 @@ local_conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=local
 class ClientsNotReady(Exception):
     pass
 
-class Processor():
-    def __init__(self, cc_conn,local_conn):
-        self.reported_ids = set()
-        self.task_results = dict()
-        self.tasks = dict()
-
+class Processor(Client):
+    def __init__(self, cc_conn, local_conn, clients):
         self.cc_conn = cc_conn
         self.local_conn = local_conn
         
-        #self.job_status = self.connected_clients
-        
-        self.cc_sender = Sender(cc_conn,settings.CC_EXCHANGE)
-        #self.cc_sender.send_message(routing_key="task_result", message="test")
+        sender = Sender(self.cc_conn,settings.CC_EXCHANGE)
+        receiver = Receiver(conn = self.cc_conn, exch = settings.CC_EXCHANGE, queue = settings.CC_QUEUE)
+        super(Client,self).__init__(receiver, sender, client_name="processor")
+        self.receiver.add_listener(self.dispatch_task,["task"])
+       
         self.local_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
-
-        self.cc_receiver = Receiver(conn = cc_conn, exch = settings.CC_EXCHANGE, queue = settings.CC_QUEUE)
-        self.cc_receiver.add_listener(self.dispatch_task,["task"])
-
         self.local_receiver = Receiver(conn = local_conn, exch = settings.LOCAL_EXCHANGE, queue = settings.LOCAL_QUEUE)
         self.local_receiver.add_listener(self.dispatch_result,["result"])
         self.local_receiver.add_listener(self.supervisor,["job-done","client-id"])
-
-        self.client_manager = ClientManager(self.local_receiver,self.local_sender)
-    
-    def start(self):
-        self.cc_receiver.start()
         self.local_receiver.start()
 
-    def stop(self):
-        if self.cc_receiver.ch.is_open:
-            self.cc_receiver.stop_consuming()
-        self.cc_receiver.join()
+        self.client_manager = ClientManager(self.local_receiver,self.local_sender)
+        self.client_manager.await_clients(clients)
+
+        self.pending_tasks = dict()
+        self.task_queue = dict()
+        self.task_results = list()
         
+
+    def kill(self):
+        super(Client, self).kill()
+
         if self.local_receiver.ch.is_open:
             self.local_receiver.stop_consuming()
+
         self.local_receiver.join()
 
-        
-    def send_report(self):
-        self.reported_ids.clear()
-        self.task_results.clear()
-        self.tasks.clear()
+    def dispatch_result(self, method, body):
+        message = json.loads(body)
+        task_id = message["task_id"]
+        client_id = int(message["client_id"])
 
-    def dispatch_result(self,receiver,method, result):
-        res = json.loads(result)
-        task_id = res["task_id"]
-        task_lang = res["lang"]
-        key_error = False
-    
-        try:
-            self.task_results[task_id]
-        except KeyError:
-            key_error = True
-            self.task_results[task_id] = dict()
+        connected_clients = self.connection_manager.connected_clients.keys()
+        connected_clients = set(connected_clients)
 
-        if res["error"] == "1":
-            self.reported_ids.add(task_id)
-            try:
-                task = self.tasks[task_id]
-            except KeyError:
-                task = "task not found!"
+        if client_id not in connected_clients:
+            print "Unknown client! Client id: {0}".format(client_id)
+            return
+  
+        active_clients = self.connection_manager.active_clients
 
-            err_report["error"] = "1"
-            err_report["task"] = task
-
-            self.task_results[task_id][task_lang] = json.dumps(err_report)
+        if client_id not in active_clients:
+            print "Got message from inactive client! Client id: {0}".format(client_id)
             return
 
-        if task_id in reported_ids:
-            self.task_results[task_id][task_lang] = res["result"]
-            return
+        if task_id in pending_tasks[client_id]:
+            task_results.append(message["result"])
+            pending_tasks[task_id].remove(client_id) # Or task_id ?
+            if len(pending_tasks[task_id]) == 0:
+                del pending_tasks[task_id]
 
-        if key_error == False:
-            for lang in self.task_results[task_id]:
-                for key in res["result"]:
-                    if self.task_results[task_id][lang][key] != res["result"][key]:
-                        self.reported_ids.add(task_id)
-                        self.task_results[task_id][task_lang] = res["result"]
         else:
-            self.task_results[task_id][task_lang] = res["result"]
-        return
+            print "Got task that is not in pending tasks!\nTask id {0}, client id: {1}".format(task_id, client_id)
 
-    def dispatch_task(self, receiver, method, message):
-        print "Task dipatched\n{0}".format(message)
+    def dispatch_task(self, receiver, method, body):
+        message = json.loads(body)
 
-        task = json.loads(message)
         self.tasks = task["tasks"]
 
         for task_id in task["reported_ids"]:
@@ -116,41 +93,15 @@ class Processor():
 
         return
 
-
-invited_clients = set(["python"])
-connected_clients = set(["python"])
-
-def invite_clients(receiver, delivery_tag, message):
-    client = json.loads(message)["client"]
-    if client in invited_clients:
-        print "Client {0} accept the invitation!".format(client)
-        invited_clients.remove(client)
-        if len(invited_clients) == 0:
-            receiver.ch.stop_consuming()
-            print "All clients have been connected!"
+    def send_report(self):
+        self.reported_ids.clear()
+        self.task_results.clear()
+        self.tasks.clear()
 
 
 def main():
-    invite_receiver = Receiver(conn=local_conn,
-			           exch=settings.LOCAL_EXCHANGE,
-                                       queue=settings.LOCAL_QUEUE)
+    pass
 
-    invite_receiver.add_listener(invite_clients,["client-id"])
-    invite_receiver.start()
-    invite_receiver.join(180)
-
-    if len(invited_clients) > 0:
-        raise ClientsNotReady
-    
-    p = Processor(cc_conn=cc_conn,local_conn = local_conn,connected_clients=connected_clients)
-    p.start()
-
-    #stub_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
-    #task = dict()
-    #task["task_id"] = "12345"
-    #task["task"] = "http://example.com"
-    print "Stub"
-    print p.tasks
 if __name__=="__main__":
     main()
     
