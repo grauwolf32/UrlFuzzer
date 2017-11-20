@@ -4,7 +4,7 @@ import json
 
 class Receiver(threading.Thread):
     def __init__(self,conn,exch,queue,exch_type="direct",prefetch_count=1):
-        super(Receiver,threading.Thread).__init__()      
+        super(threading.Thread,self).__init__()      
 
         self.conn = conn
         self.exch = exch
