@@ -6,6 +6,7 @@ import signal
 import settings 
 
 from amqp_conn import Receiver, Sender
+from client_manager import ClientManager
 
 cc_cred = pika.PlainCredentials(settings.CC_USER, settings.CC_PASSWD)
 cc_conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=cc_cred,host=settings.CC_IP))
@@ -17,42 +18,28 @@ class ClientsNotReady(Exception):
     pass
 
 class Processor():
-    def __init__(self, cc_conn,local_conn, connected_clients):
+    def __init__(self, cc_conn,local_conn):
         self.reported_ids = set()
         self.task_results = dict()
         self.tasks = dict()
 
-        self.connected_clients = connected_clients
-        self.n_clients = len(connected_clients)
-        self.heartbeat = dict()
-
-        self.time_start = time.time()
-        self.heartbeat["supervisor"] = self.time_start
-
-        for client in self.connected_clients:
-           self.heartbeat[client] = self.time_start
-
         self.cc_conn = cc_conn
         self.local_conn = local_conn
         
-        self.job_status = self.connected_clients
+        #self.job_status = self.connected_clients
+        
         self.cc_sender = Sender(cc_conn,settings.CC_EXCHANGE)
-        self.cc_sender.send_message(routing_key="task_result", message="huipizda")
-
+        #self.cc_sender.send_message(routing_key="task_result", message="test")
         self.local_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
 
-        self.cc_receiver = Receiver(conn = cc_conn,
-                                       exch = settings.CC_EXCHANGE,
-                                            queue = settings.CC_QUEUE)
-
+        self.cc_receiver = Receiver(conn = cc_conn, exch = settings.CC_EXCHANGE, queue = settings.CC_QUEUE)
         self.cc_receiver.add_listener(self.dispatch_task,["task"])
 
-        self.local_receiver = Receiver(conn = local_conn,
-                                           exch = settings.LOCAL_EXCHANGE,
-                                               queue = settings.LOCAL_QUEUE)
-
+        self.local_receiver = Receiver(conn = local_conn, exch = settings.LOCAL_EXCHANGE, queue = settings.LOCAL_QUEUE)
         self.local_receiver.add_listener(self.dispatch_result,["result"])
-        self.local_receiver.add_listener(self.supervisor,["job-done","keep-alive","client-id"])
+        self.local_receiver.add_listener(self.supervisor,["job-done","client-id"])
+
+        self.client_manager = ClientManager(self.local_receiver,self.local_sender)
     
     def start(self):
         self.cc_receiver.start()
@@ -67,28 +54,6 @@ class Processor():
             self.local_receiver.stop_consuming()
         self.local_receiver.join()
 
-    def supervisor(self, receiver, method, message): #TODO Refactoring !!!!
-        message = json.loads(message)
-        client = message["client"]
-
-        if method.routing_key == "job-done":
-            try:
-                self.job_status.remove(client)
-            except:
-                pass
-
-            if len(self.job_status) == 0:
-                self.send_report()
-            return 
-
-        if method.routing_key == "keep-alive":
-            print "Got keep-alive from {0}".format(client)
-            current_time = time.time()
-            self.heartbeat[client] = current_time
-            return
-
-        if method.routing_key == "client-id":
-            return
         
     def send_report(self):
         self.reported_ids.clear()
