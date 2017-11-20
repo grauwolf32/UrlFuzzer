@@ -13,20 +13,16 @@ class Server():
         self.conn = conn
         self.sender = Sender(conn,settings.CC_EXCHANGE)
         self.receiver = Receiver(conn,settings.CC_EXCHANGE,settings.CC_QUEUE)
-        self.client_manager = ClientManager(self.receiver, self.sender)
+        
+        self.receiver.start()
+        self.client_manager = ClientManager(self.receiver, self.sender,keep_alive=100)
 
         self.receiver.add_listener(self.on_result,["task_result"])
         self.task_counter = 0
-
-    def start(self):
-        self.receiver.start()
+        
     
     def on_result(self, receiver, message):
         print message
-
-    def on_connect(self, receiver, message):
-        
-    
     
     def send_tasks(self, payloads, reported_ids):
         message = dict()

@@ -1,3 +1,8 @@
+import threading
+import settings
+import random
+import json
+
 from amqp_conn import Receiver, Sender
 
 cred = pika.PlainCredentials(settings.CC_USER, settings.CC_PASSWD)
