@@ -37,9 +37,9 @@ class Processor(Client):
         self.client_manager = ClientManager(self.local_receiver,self.local_sender)
         self.client_manager.await_clients(clients)
 
-        self.pending_tasks = dict()
-        self.task_queue = dict()
-        self.task_results = list()
+        self.pending_tasks = dict() # Set of clients for task_id
+        self.task_queue = dict()    # Task data
+        self.task_results  = list()  
         
 
     def kill(self):
@@ -70,37 +70,45 @@ class Processor(Client):
 
         if task_id in pending_tasks[client_id]:
             task_results.append(message["result"])
-            pending_tasks[task_id].remove(client_id) # Or task_id ?
+            pending_tasks[task_id].remove(client_id) 
+
             if len(pending_tasks[task_id]) == 0:
-                del pending_tasks[task_id]
+                del pending_tasks[task_id] 
+                del task_queue[task_id]
 
         else:
-            print "Got task that is not in pending tasks!\nTask id {0}, client id: {1}".format(task_id, client_id)
+            print '''Got task that is not in pending tasks!\n Task id {0}, client id: {1}'''.format(task_id, client_id)
 
     def dispatch_task(self, receiver, method, body):
         message = json.loads(body)
+        for task in message:
+            task_id = task["task_id"]
+            task_data = task["data"]
 
-        self.tasks = task["tasks"]
+            self.task_queue[task_id] = task_data
+            self.local_sender.send_message(routing_key = "task",
+					   exchange = settings.LOCAL_EXCHANGE,
+					   	message = json.dumps(task))
 
-        for task_id in task["reported_ids"]:
-            self.reported_ids.add(task_id)
-    
-        for task_id in tasks:
-            self.local_sender.basic_publish(
-                                routing_key = "task", 
-				    exchange = settings.LOCAL_EXCHANGE,
-                                        body = '{"{0}":"{1}"}'.format(task_id,self.tasks[task_id]))
+            self.pending_tasks[task_id] = self.connection_manager.active_clients
 
         return
 
-    def send_report(self):
-        self.reported_ids.clear()
-        self.task_results.clear()
-        self.tasks.clear()
+    def report_manager(self):
+        if len(self.task_results) > 0:
+            self.sender.send_message(routing_key = "task_result",
+					exchange = CC_EXCHANGE,
+					message = json.dumps(self.task_results))
+        self.task_results = list()
 
 
 def main():
-    pass
+    processor = Processor(cc_conn, local_conn,["Python"])
+    connected = super(Client,self).connect(timeout = 20.0)
+    if not connected:
+        print "Processor could not connect to server!"
+
+    return
 
 if __name__=="__main__":
     main()

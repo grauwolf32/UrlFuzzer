@@ -62,7 +62,7 @@ class Client():
         stage_0(self)
 
         routing_key = "".join(("client_",str(self.client_id)))
-        self.receiver.add_listener(self.accept_connection,["routing_key"])
+        self.receiver.add_listener(self.accept_connection,[routing_key])
         
         while self.connection_stage != 1 and timeout > 0:
             time.sleep(delay)

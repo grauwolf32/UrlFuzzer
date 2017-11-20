@@ -46,12 +46,8 @@ class Receiver(threading.Thread):
                 self.listeners[routing_key].add(callback)
             else:
                 self.listeners[routing_key] = [callback]
-                self.ch.queue_bind(exchange=self.exch, 
-				        queue=self.queue, 
-			                   routing_key=routing_key)
+                self.ch.queue_bind(exchange=self.exch, queue=self.queue, routing_key=routing_key)
         return
-                
-        
 
     def run(self):
         self.ch.start_consuming()
