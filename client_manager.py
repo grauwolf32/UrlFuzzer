@@ -118,6 +118,10 @@ class ClientManager():
 
     def await_clients(self, client_names):
         client_names = set(client_names)
-        while not client_names.issubset(self.active_clients):
+        active_clients = set([self.connected_clients[i]["client_name"] for i in self.active_clients])
+
+        while not client_names.issubset(active_clients):
+            active_clients = set([self.connected_clients[i]["client_name"] for i in self.active_clients])
             time.sleep(1)
+        
         return
