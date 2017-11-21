@@ -1,6 +1,8 @@
 import threading
 import settings
 import random
+import time
+import pika
 import json
 
 from amqp_conn import Receiver, Sender
@@ -11,7 +13,10 @@ class Client():
         self.sender = sender
         self.receiver.start()
 
-    def accept_connection(self, method, body):
+        self.client_name = client_name
+        self.client_id = client_id
+
+    def accept_connection(self, receiver, method, body):
             if self.connection_stage != 0:
                 print "Connection has been accepted! Duplicate."
                 return 
@@ -40,8 +45,8 @@ class Client():
                 return
 
             request = {
-                 "client_id" : str(client_id),
-                 "client_name" : client_name,
+                 "client_id" : str(self.client_id),
+                 "client_name" : self.client_name,
 	    }
 
             self.sender.send_message(routing_key="client_connect", message=json.dumps(request))

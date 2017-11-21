@@ -4,7 +4,7 @@ import json
 
 class Receiver(threading.Thread):
     def __init__(self,conn,exch,queue,exch_type="direct",prefetch_count=1):
-        super(threading.Thread,self).__init__()      
+        super(Receiver, self).__init__()      
 
         self.conn = conn
         self.exch = exch
@@ -32,7 +32,7 @@ class Receiver(threading.Thread):
             try:
                 listener(self, method, body)
             except:
-                pass #TODO Add logs
+                print "Error while calling the listener {0}".format(listener)
 
         self.ch.basic_ack(delivery_tag = method.delivery_tag)
         
