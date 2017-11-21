@@ -26,7 +26,7 @@ class ClientManager():
         self.receiver.add_listener(self.on_client_ready,["client_ready"]) 
         self.receiver.add_listener(self.on_keepalive,["keepalive"]) 
 
-        #threading.Timer(self.keep_alive, self.manage_clients).start() # Repeated task
+        threading.Timer(self.keep_alive, self.manage_clients).start() # Repeated task
 
     def on_connect(self, receiver, method, message):
         try:

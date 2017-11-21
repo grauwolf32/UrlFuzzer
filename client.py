@@ -8,7 +8,7 @@ import json
 from amqp_conn import Receiver, Sender
 
 class Client():
-    def __init__(self,receiver, sender,client_name="",client_id=random.randint(0,10**6)):
+    def __init__(self, receiver, sender, client_name="", client_id=random.randint(0,10**6)):
         self.receiver = receiver
         self.sender = sender
         self.receiver.start()

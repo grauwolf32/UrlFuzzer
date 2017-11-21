@@ -6,6 +6,7 @@ import time
 
 from urlparse import urlparse
 from amqp_conn import Receiver, Sender
+from client import Client
 
 cred = pika.PlainCredentials(settings.LOCAL_USER, settings.LOCAL_PASSWD)
 conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=cred,host=settings.LOCAL_IP))
@@ -41,34 +42,20 @@ def dump_result(parse_result):
     return task_result
 
 
-class PyClient():
+class PyClient(Client):
     def __init__(self, conn,client_name,queue):
         self.conn = conn
-        self.client = client_name
-
         self.sender = Sender(conn,settings.LOCAL_EXCHANGE)
-
-        self.receiver = Receiver(conn,settings.LOCAL_EXCHANGE,queue)
+        self.receiver = Receiver(conn,settings.LOCAL_EXCHANGE, queue)
+        
+        Super(Client, self).__init__(receiver, listener, client_name)
         self.receiver.add_listener(self.process_result,["task"])
 
-        self.sender.send_message(routing_key="client-id",message='{"client":"%s"}'%(self.client))
-        self.keep_alive()
-
-    def keep_alive(self):
-        threading.Timer(settings.HEARTBEAT_TIME, self.keep_alive).start()
-        self.sender.send_message(routing_key="keep-alive",
-                         message='{"client":"%s","message_type":"keep-alive"}'% (self.client))
-    def start(self):
-        self.receiver.start()
-
-    def process_result(self, receiver, delivery_tag, message):
-        print "Got task: {0}".format(message)
-
-        task = json.loads(message)
+    def process(self, receiver, method, body):
+        message = json.loads(body)
         
-        task_id = task.keys[0]
-        task = task.values[0]
-        error = "0"
+        task_id = message["task_id"]
+        task_data = message["task_data"]
 
 	try:
             result = do_task(task)
@@ -96,9 +83,6 @@ class PyClient():
 def main():
     client = PyClient(conn,"python","python_queue")
     client.start()
-
-    #task_result = pycl.do_task("http://example.com.ru:80:80/aaa/?tttt&x=11")
-    #print json.dumps(task_result)
 
 if __name__== "__main__":
     main()

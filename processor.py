@@ -23,15 +23,18 @@ class Processor(Client):
         self.cc_conn = cc_conn
         self.local_conn = local_conn
         
-        sender = Sender(self.cc_conn,settings.CC_EXCHANGE)
-        receiver = Receiver(conn = self.cc_conn, exch = settings.CC_EXCHANGE, queue = settings.CC_QUEUE)
+        sender = Sender(self.cc_conn,settings.REMOTE_EXCHANGE)
+        receiver = Receiver(conn = self.cc_conn, exch = settings.REMOTE_EXCHANGE, queue = settings.REMOTE_SERVER_QUEUE)
         super(Client,self).__init__(receiver, sender, client_name="processor")
-        self.receiver.add_listener(self.dispatch_task,["task"])
+        
+        self.remote_sender = Sender(self.cc_conn,settings.REMOTE_EXCHANGE)
+        self.remote_receiver = Receiver(conn = self.cc_conn, exch = settings.REMOTE_EXCHANGE, queue = settings.REMOTE_PROCESSOR_QUEUE)
+        self.remote_receiver.add_listener(self.dispatch_task,["task"])
+        self.remote_receiver.start()
        
         self.local_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
         self.local_receiver = Receiver(conn = local_conn, exch = settings.LOCAL_EXCHANGE, queue = settings.LOCAL_QUEUE)
         self.local_receiver.add_listener(self.dispatch_result,["result"])
-        self.local_receiver.add_listener(self.supervisor,["job-done","client-id"])
         self.local_receiver.start()
 
         self.client_manager = ClientManager(self.local_receiver,self.local_sender)
@@ -83,7 +86,7 @@ class Processor(Client):
         message = json.loads(body)
         for task in message:
             task_id = task["task_id"]
-            task_data = task["data"]
+            task_data = task["task_data"]
 
             self.task_queue[task_id] = task_data
             self.local_sender.send_message(routing_key = "task",
@@ -97,7 +100,7 @@ class Processor(Client):
     def report_manager(self):
         if len(self.task_results) > 0:
             self.sender.send_message(routing_key = "task_result",
-					exchange = CC_EXCHANGE,
+					exchange = REMOTE_EXCHANGE,
 					message = json.dumps(self.task_results))
         self.task_results = list()
 
