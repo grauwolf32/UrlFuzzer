@@ -2,12 +2,25 @@ import pika
 import threading
 import json
 
+class Connection()
+    def __init__(self,user,password,host):
+        self.credenials = pika.PlainCredentials(user, password)
+        self.host = host
+
+    def get_connection(self):
+        return pika.BlockingConnection(pika.ConnectionParameters(credentials=self.credenials, host=self.host)) 
+
+class Connection():
+    def __init__(self, conn, exchange):
+        self.connection = conn
+        self.exchange = exchange
+
 class Receiver(threading.Thread):
-    def __init__(self,conn,exch,queue,exch_type="direct",prefetch_count=1):
+    def __init__(self,conn, queue, exch_type="direct",prefetch_count=1):
         super(Receiver, self).__init__()      
 
-        self.conn = conn
-        self.exch = exch
+        self.conn = conn.connection
+        self.exch = conn.exchange
         self.queue = queue
         self.listeners = dict()
 
@@ -24,9 +37,8 @@ class Receiver(threading.Thread):
             listeners = self.listeners[method.routing_key]
         except KeyError:
             pass
-  
-        if len(listeners) == 0:
-            return
+
+        print body
 
         for listener in listeners:   
             try:
@@ -54,9 +66,9 @@ class Receiver(threading.Thread):
 
 
 class Sender():
-    def __init__(self, conn,exch, exch_type="direct"):
-        self.conn = conn
-        self.exch = exch
+    def __init__(self, conn, exch_type="direct"):
+        self.conn = conn.connection
+        self.exch = conn.exchange
 
         self.ch = self.conn.channel()
         self.ch.exchange_declare(exchange=self.exch,exchange_type=exch_type)

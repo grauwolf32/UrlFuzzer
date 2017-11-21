@@ -5,14 +5,14 @@ import random
 import json
 import time
 
-from amqp_conn import Receiver, Sender
+from amqp_conn import Receiver, Sender, Connection
 from client_manager import ClientManager
             
 class Server():
-    def __init__(self,conn):
+    def __init__(self, conn, local_queue):
         self.conn = conn
-        self.sender = Sender(conn, settings.LOCAL_EXCHANGE)
-        self.receiver = Receiver(conn, settings.LOCAL_EXCHANGE, settings.LOCAL_TASK_QUEUE)
+        self.sender = Sender(conn)
+        self.receiver = Receiver(conn, local_queue)
         self.receiver.add_listener(self.on_result,["task_result"])
         self.receiver.start()
 

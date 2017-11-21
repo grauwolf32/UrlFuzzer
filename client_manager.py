@@ -5,31 +5,32 @@ import time
 import json
 import pika
 
-from amqp_conn import Receiver, Sender
-
-cred = pika.PlainCredentials(settings.LOCAL_USER, settings.LOCAL_PASSWD)
-conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=cred,host=settings.LOCAL_IP))
+from amqp_conn import *
 
 class ClientManager():
-    def __init__(self, receiver, sender, max_clients=100, keep_alive=10, fuck_up=3):
+    def __init__(self, conn, queue, max_clients=100, keep_alive=10, fuck_up=3):
+        self.connection = conn
+        self.queue = queue 
+        self.receiver = Receiver(self.connection, self.queue)
+        self.receiver.add_listener(self.on_connect,["client_connect"]) 
+        self.receiver.add_listener(self.on_client_ready,["client_ready"]) 
+        self.receiver.add_listener(self.on_keepalive,["keepalive"])
 
+        self.sender = Sender(self.connection)
         self.connected_clients = dict()
         self.awaited_clients = set()
         self.active_clients = set()
         
         self.keep_alive = keep_alive
-        self.receiver = receiver
         self.fuck_up = fuck_up
-        self.sender = sender
 
-        self.receiver.add_listener(self.on_connect,["client_connect"]) 
-        self.receiver.add_listener(self.on_client_ready,["client_ready"]) 
-        self.receiver.add_listener(self.on_keepalive,["keepalive"]) 
-
+        self.receiver.start()
         threading.Timer(self.keep_alive, self.manage_clients).start() # Repeated task
 
     def on_connect(self, receiver, method, message):
-        try:
+        print "On connect"
+        #try:
+        if True:
             connect_message = json.loads(message)
             client_id = int(connect_message["client_id"])
             client_name = connect_message["client_name"]
@@ -65,10 +66,11 @@ class ClientManager():
 
             self.awaited_clients.add(client_id) 
             
-        except:
-            print "Client connection error. Invalid message {0}".format(message)
+        #except:
+        #    print "Client connection error. Invalid message {0}".format(message)
 
     def on_client_ready(self, receiver, method, message):
+        print "On client ready"
         try:
             ready_message = json.loads(message)
             client_id = int(ready_message["client_id"])
@@ -88,8 +90,9 @@ class ClientManager():
             print "Client ready error. Invalid message: {0}".format(message)
 
     def on_keepalive(self, receiver, method, message):
+        print "On keepalive"
         keepalive_message = json.loads(message)
-        client_id = keepalive_message["client_id"]
+        client_id = int(keepalive_message["client_id"])
 
         if client_id not in set(self.connected_clients.keys()):
             print "Received keepalive from unknown client {0}".format(client_id)
@@ -103,10 +106,14 @@ class ClientManager():
         #self.connected_clients[client_id]["active"] = 1
 
     def manage_clients(self):
+        print "Manage Clients"
         threading.Timer(self.keep_alive, self.manage_clients).start()
         now = time.time()
-        for client_id in self.connected_clients:
-            last_seen = connected_clients[client_id]["last_seen"] 
+        print "Conneted clients: " 
+        print self.connected_clients
+
+        for client_id in self.connected_clients.keys():
+            last_seen = self.connected_clients[client_id]["last_seen"] 
             fucked_up = int((now - last_seen)/self.keep_alive)
 
             if fucked_up > 1:

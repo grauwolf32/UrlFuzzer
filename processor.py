@@ -5,35 +5,38 @@ import time
 import signal
 import settings 
 
-from amqp_conn import Receiver, Sender
+from amqp_conn import *
 from client_manager import ClientManager
 from client import Client
 
-cc_cred = pika.PlainCredentials(settings.CC_USER, settings.CC_PASSWD)
-cc_conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=cc_cred,host=settings.CC_IP))
+cc_credentials = pika.PlainCredentials(settings.CC_USER, settings.CC_PASSWD)
+cc_connection = pika.BlockingConnection(pika.ConnectionParameters(credentials=cc_credentials, host=settings.CC_IP))
 
-local_cred = pika.PlainCredentials(settings.LOCAL_USER, settings.LOCAL_PASSWD)
-local_conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=local_cred,host=settings.LOCAL_IP))
+local_credentials = pika.PlainCredentials(settings.LOCAL_USER, settings.LOCAL_PASSWD)
+local_connection = pika.BlockingConnection(pika.ConnectionParameters(credentials=local_credentials, host=settings.LOCAL_IP))
+
+local_conn = Connection(local_connection, settings.LOCAL_EXCHANGE) 
+remote_conn = Connection(cc_connection, settings.REMOTE_EXCHANGE)
 
 class ClientsNotReady(Exception):
     pass
 
 class Processor(Client):
-    def __init__(self, cc_conn, local_conn, clients):
-        self.cc_conn = cc_conn
+    def __init__(self, remote_conn, local_conn, remote_server_queue, remote_task_queue, local_queue, clients):
+        self.remote_conn = remote_conn
         self.local_conn = local_conn
-        
-        sender = Sender(self.cc_conn,settings.REMOTE_EXCHANGE)
-        receiver = Receiver(conn = self.cc_conn, exch = settings.REMOTE_EXCHANGE, queue = settings.REMOTE_SERVER_QUEUE)
-        super(Client, self).__init__(receiver, sender, client_name="processor")
+        self.remote_server_queue = remote_server_queue
+        self.remote_task_queue = remote_task_queue
+
+        super(Client, self).__init__(conn = remote_conn, queue = remote_server_queue, client_name="processor")
         super(Client, self).connect(timeout=100.0) # Connect to remote client manager
 
-        self.remote_receiver = Receiver(conn = self.cc_conn, exch = settings.REMOTE_EXCHANGE, queue = settings.REMOTE_TASK_QUEUE)
+        self.remote_receiver = Receiver(conn = remote_conn, queue = remote_task_queue)
         self.remote_receiver.add_listener(self.dispatch_task,["task"])
         self.remote_receiver.start()
        
-        self.local_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
-        self.local_receiver = Receiver(conn = local_conn, exch = settings.LOCAL_EXCHANGE, queue = settings.LOCAL_PROCESSOR_QUEUE)
+        self.local_sender = Sender(self.local_conn)
+        self.local_receiver = Receiver(conn = local_conn, queue = local_queue)
         self.local_receiver.add_listener(self.dispatch_result,["task_result"])
         self.local_receiver.start()
 

@@ -5,20 +5,32 @@ import time
 import pika
 import json
 
-from amqp_conn import Receiver, Sender
+from amqp_conn import *
 
 class Client():
-    def __init__(self, receiver, sender, client_name="", client_id=random.randint(0,10**6)):
-        self.receiver = receiver
-        self.sender = sender
-        self.receiver.start()
+    def __init__(self, conn, queue, client_name="", client_id=random.randint(0,10**6)):
+        self.connection = conn
+        self.queue = queue
+        self.receiver = Receiver(conn = self.connection, queue = self.queue)
+        
+
+        self.sender = Sender(self.connection)
+        self.keep_alive_ = Sender(self.connection)
 
         self.client_name = client_name
         self.client_id = client_id
+        self.receiver.start()
+        print "client id: {0}".format(client_id)
 
     def accept_connection(self, receiver, method, body):
+            print "Accept connection"
             if self.connection_stage != 0:
                 print "Connection has been accepted! Duplicate."
+                return 
+
+            routing_key = "".join(("client_",str(self.client_id))) # TODO Do it more smart
+
+            if method.routing_key != routing_key:
                 return 
 
             self.connection_stage = 1
@@ -32,6 +44,8 @@ class Client():
                     self.client_id = int(message["new_id"])
 
                 self.keep_alive = int(message["keep-alive"])
+                threading.Timer(self.keep_alive, self.keepalive).start()
+
             except:
                 print "Wrong message format:\n{0}".format(message)
         
@@ -75,6 +89,8 @@ class Client():
 
         if self.connection_stage == 1:
             stage_2(self)
+            self.connection_stage = 2 
+
             return True
 
         else:
@@ -91,7 +107,7 @@ class Client():
 		"client_id" : str(self.client_id),
         }
 
-        self.sender.send_message(routing_key="keepalive", message=json.dumps(response))
+        self.keep_alive_.send_message(routing_key="keepalive", message=json.dumps(response))
 
     def kill(self):
         if self.receiver.ch.is_open:
