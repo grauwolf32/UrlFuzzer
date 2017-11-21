@@ -25,23 +25,23 @@ class Processor(Client):
         
         sender = Sender(self.cc_conn,settings.REMOTE_EXCHANGE)
         receiver = Receiver(conn = self.cc_conn, exch = settings.REMOTE_EXCHANGE, queue = settings.REMOTE_SERVER_QUEUE)
-        super(Client,self).__init__(receiver, sender, client_name="processor")
-        
-        self.remote_sender = Sender(self.cc_conn,settings.REMOTE_EXCHANGE)
-        self.remote_receiver = Receiver(conn = self.cc_conn, exch = settings.REMOTE_EXCHANGE, queue = settings.REMOTE_PROCESSOR_QUEUE)
+        super(Client, self).__init__(receiver, sender, client_name="processor")
+        super(Client, self).connect(timeout=100.0) # Connect to remote client manager
+
+        self.remote_receiver = Receiver(conn = self.cc_conn, exch = settings.REMOTE_EXCHANGE, queue = settings.REMOTE_TASK_QUEUE)
         self.remote_receiver.add_listener(self.dispatch_task,["task"])
         self.remote_receiver.start()
        
         self.local_sender = Sender(local_conn,settings.LOCAL_EXCHANGE)
-        self.local_receiver = Receiver(conn = local_conn, exch = settings.LOCAL_EXCHANGE, queue = settings.LOCAL_QUEUE)
-        self.local_receiver.add_listener(self.dispatch_result,["result"])
+        self.local_receiver = Receiver(conn = local_conn, exch = settings.LOCAL_EXCHANGE, queue = settings.LOCAL_PROCESSOR_QUEUE)
+        self.local_receiver.add_listener(self.dispatch_result,["task_result"])
         self.local_receiver.start()
 
         self.client_manager = ClientManager(self.local_receiver,self.local_sender)
         self.client_manager.await_clients(clients)
 
         self.pending_tasks = dict() # Set of clients for task_id
-        self.task_queue = dict()    # Task data
+        self.task_queue    = dict() # Task data
         self.task_results  = list()  
         
 
@@ -72,7 +72,7 @@ class Processor(Client):
             return
 
         if task_id in pending_tasks[client_id]:
-            task_results.append(message["result"])
+            task_results.append(message["task_result"])
             pending_tasks[task_id].remove(client_id) 
 
             if len(pending_tasks[task_id]) == 0:
@@ -104,25 +104,8 @@ class Processor(Client):
 					message = json.dumps(self.task_results))
         self.task_results = list()
 
-
-def main():
-    processor = Processor(cc_conn, local_conn,["Python"])
-    connected = super(Client,self).connect(timeout = 20.0)
-    if not connected:
-        print "Processor could not connect to server!"
-
-    return
-
-if __name__=="__main__":
-    main()
-    
-        
-#def signal_handler(signal, frame):
-#    print 'You pressed Ctrl+C!'
-#    sys.exit(0)
-
-#signal.signal(signal.SIGINT, signal_handler)
 # ps -ax  | grep processor.py | cut -d " " -f1| xargs -I {} kill -9 {}
+# kilall -9 python 
 
 
         

@@ -11,10 +11,6 @@ from client import Client
 cred = pika.PlainCredentials(settings.LOCAL_USER, settings.LOCAL_PASSWD)
 conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=cred,host=settings.LOCAL_IP))
 
-def dump_result(parse_result):
-    
-
-
 class PyClient(Client):
     def __init__(self, conn,client_name,queue):
         self.conn = conn
@@ -26,6 +22,7 @@ class PyClient(Client):
 
     def process_task(self, receiver, method, body):
         message = json.loads(body)
+        
         task_id = message["task_id"]
         task_data = message["task_data"]
 
@@ -35,7 +32,12 @@ class PyClient(Client):
         except:
             task_result = "error"
 
-        response = { "task_result" : task_result }
+        response = { 
+                "client_id" : self.client_id,
+                "task_id" : task_id,
+		"task_result" : task_result,
+		}
+
         self.sender.send_message(routing_key="task_result", message=json.dumps(response))
         receiver.ch.basic_ack(delivery_tag = delivery_tag)
 
@@ -59,10 +61,3 @@ class PyClient(Client):
                 process_result[attribute] = ""
 
         return process_result
-
-def main():
-    client = PyClient(conn,"python","python_queue")
-    client.start()
-
-if __name__== "__main__":
-    main()
