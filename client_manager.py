@@ -8,15 +8,17 @@ import pika
 from amqp_conn import *
 
 class ClientManager():
-    def __init__(self, conn, queue, max_clients=100, keep_alive=10, fuck_up=3):
-        self.connection = conn
-        self.queue = queue 
-        self.receiver = Receiver(self.connection, self.queue)
+    def __init__(self, binder, queue, max_clients=100, keep_alive=10, fuck_up=3):
+        self.binder = binder
+        self.queue = queue
+
+        self.receiver = Receiver(self.binder, self.queue)
         self.receiver.add_listener(self.on_connect,["client_connect"]) 
         self.receiver.add_listener(self.on_client_ready,["client_ready"]) 
         self.receiver.add_listener(self.on_keepalive,["keepalive"])
 
-        self.sender = Sender(self.connection)
+        self.sender = Sender(self.binder)
+
         self.connected_clients = dict()
         self.awaited_clients = set()
         self.active_clients = set()
@@ -29,8 +31,7 @@ class ClientManager():
 
     def on_connect(self, receiver, method, message):
         print "On connect"
-        #try:
-        if True:
+        try:
             connect_message = json.loads(message)
             client_id = int(connect_message["client_id"])
             client_name = connect_message["client_name"]
@@ -66,8 +67,8 @@ class ClientManager():
 
             self.awaited_clients.add(client_id) 
             
-        #except:
-        #    print "Client connection error. Invalid message {0}".format(message)
+        except:
+            print "Client connection error. Invalid message {0}".format(message)
 
     def on_client_ready(self, receiver, method, message):
         print "On client ready"
@@ -103,7 +104,6 @@ class ClientManager():
             self.awaited_clients.remove(client_id)
             
         self.connected_clients[client_id]["last_seen"] = time.time()
-        #self.connected_clients[client_id]["active"] = 1
 
     def manage_clients(self):
         print "Manage Clients"

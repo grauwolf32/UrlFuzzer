@@ -9,38 +9,32 @@ from amqp_conn import *
 from client_manager import ClientManager
 from client import Client
 
-cc_credentials = pika.PlainCredentials(settings.CC_USER, settings.CC_PASSWD)
-cc_connection = pika.BlockingConnection(pika.ConnectionParameters(credentials=cc_credentials, host=settings.CC_IP))
-
-local_credentials = pika.PlainCredentials(settings.LOCAL_USER, settings.LOCAL_PASSWD)
-local_connection = pika.BlockingConnection(pika.ConnectionParameters(credentials=local_credentials, host=settings.LOCAL_IP))
-
-local_conn = Connection(local_connection, settings.LOCAL_EXCHANGE) 
-remote_conn = Connection(cc_connection, settings.REMOTE_EXCHANGE)
-
 class ClientsNotReady(Exception):
     pass
 
 class Processor(Client):
-    def __init__(self, remote_conn, local_conn, remote_server_queue, remote_task_queue, local_queue, clients):
-        self.remote_conn = remote_conn
-        self.local_conn = local_conn
+    def __init__(self, 	remote_binder, local_binder, remote_server_queue, remote_task_queue, local_queue, clients):
+
+        self.remote_binder = remote_binder
+        self.local_binder = local_binder
+
         self.remote_server_queue = remote_server_queue
         self.remote_task_queue = remote_task_queue
+        self.local_queue = local_queue
 
-        super(Client, self).__init__(conn = remote_conn, queue = remote_server_queue, client_name="processor")
+        super(Client, self).__init__(binder=remote_binder, queue = remote_server_queue, client_name="processor")
         super(Client, self).connect(timeout=100.0) # Connect to remote client manager
 
-        self.remote_receiver = Receiver(conn = remote_conn, queue = remote_task_queue)
+        self.remote_receiver = Receiver(remote_binder, queue = remote_task_queue)
         self.remote_receiver.add_listener(self.dispatch_task,["task"])
         self.remote_receiver.start()
        
-        self.local_sender = Sender(self.local_conn)
-        self.local_receiver = Receiver(conn = local_conn, queue = local_queue)
+        self.local_sender = Sender(local_binder)
+        self.local_receiver = Receiver(local_binder, queue = local_queue)
         self.local_receiver.add_listener(self.dispatch_result,["task_result"])
         self.local_receiver.start()
 
-        self.client_manager = ClientManager(self.local_receiver,self.local_sender)
+        self.client_manager = ClientManager(local_binder, queue=local_queue, exch=local_exchange)
         self.client_manager.await_clients(clients)
 
         self.pending_tasks = dict() # Set of clients for task_id

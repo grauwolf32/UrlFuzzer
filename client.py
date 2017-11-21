@@ -8,17 +8,17 @@ import json
 from amqp_conn import *
 
 class Client():
-    def __init__(self, conn, queue, client_name="", client_id=random.randint(0,10**6)):
-        self.connection = conn
+    def __init__(self, binder, queue, client_name="", client_id=random.randint(0,10**6)):
+        self.binder = binder
         self.queue = queue
-        self.receiver = Receiver(conn = self.connection, queue = self.queue)
-        
 
-        self.sender = Sender(self.connection)
-        self.keep_alive_ = Sender(self.connection)
+        self.receiver = Receiver(self.binder, self.queue)
+        self.sender = Sender(self.binder)
+        self.keep_alive_ = Sender(self.binder)
 
         self.client_name = client_name
         self.client_id = client_id
+
         self.receiver.start()
         print "client id: {0}".format(client_id)
 

@@ -8,12 +8,9 @@ from urlparse import urlparse
 from amqp_conn import *
 from client import Client
 
-cred = pika.PlainCredentials(settings.LOCAL_USER, settings.LOCAL_PASSWD)
-conn = pika.BlockingConnection(pika.ConnectionParameters(credentials=cred,host=settings.LOCAL_IP))
-
 class PyClient(Client):
-    def __init__(self, conn, queue, client_name):
-        Super(Client, self).__init__(conn = conn, queue=queue, client_name=client_name)
+    def __init__(self, binder, queue, client_name):
+        Super(Client, self).__init__(binder = binder, queue=queue, client_name=client_name)
         self.receiver.add_listener(self.process_result,["task"])
 
     def process_task(self, receiver, method, body):

@@ -9,14 +9,14 @@ from amqp_conn import Receiver, Sender, Connection
 from client_manager import ClientManager
             
 class Server():
-    def __init__(self, conn, local_queue):
-        self.conn = conn
-        self.sender = Sender(conn)
-        self.receiver = Receiver(conn, local_queue)
+    def __init__(self, binder, local_queue):
+        self.binder = binder
+        self.sender = Sender(binder)
+        self.receiver = Receiver(binder, local_queue)
         self.receiver.add_listener(self.on_result,["task_result"])
         self.receiver.start()
 
-        self.client_manager = ClientManager(self.receiver, self.sender,keep_alive=100)
+        self.client_manager = ClientManager(binder, local_queue, self.sender,keep_alive=100)
         self.task_queue = list()
     
     def on_result(self, receiver, method, body):
