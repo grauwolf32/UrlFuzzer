@@ -63,6 +63,14 @@ class Receiver(threading.Thread):
         return
 
     #TODO Add method to remove subscription
+    def remove_key(self, routing_key):
+        if routing_key in set(self.listeners.keys()):
+            self.ch.queue_unbind(exchange=self.exch, queue=self.queue, routing_key=routing_key)
+            del self.listeners[routing_key]
+
+        else:
+            print "This receiver rather had already unbounded, or was not bound to this routing key at all."
+         
 
     def run(self):
         self.ch.start_consuming()
