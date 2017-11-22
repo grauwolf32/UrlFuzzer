@@ -12,7 +12,7 @@ class Client(object):
         self.binder = binder
         self.queue = queue
 
-        self.receiver = Receiver(self.binder, self.queue)
+        self.receiver = Receiver(self.binder, self.queue, shared_conn=True)
         self.sender = Sender(self.binder)
         self.keep_alive_ = Sender(self.binder)
 
@@ -43,6 +43,7 @@ class Client(object):
                 if status == "new_id":
                     self.client_id = int(message["new_id"])
 
+                self.receiver.remove_key(routing_key)
                 self.keep_alive = int(message["keep-alive"])
                 threading.Timer(self.keep_alive, self.keepalive).start()
 

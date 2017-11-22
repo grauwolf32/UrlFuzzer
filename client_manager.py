@@ -12,7 +12,7 @@ class ClientManager():
         self.binder = binder
         self.queue = queue
 
-        self.receiver = Receiver(self.binder, self.queue)
+        self.receiver = Receiver(self.binder, self.queue, shared_conn=True)
         self.receiver.add_listener(self.on_connect,["client_connect"]) 
         self.receiver.add_listener(self.on_client_ready,["client_ready"]) 
         self.receiver.add_listener(self.on_keepalive,["keepalive"])

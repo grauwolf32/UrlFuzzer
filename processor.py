@@ -21,11 +21,11 @@ class Processor(Client):
         self.remote_task_queue = remote_task_queue
         self.local_queue = local_queue
 
-        self.remote_receiver = Receiver(remote_binder, queue = remote_task_queue)
+        self.remote_receiver = Receiver(remote_binder, queue = remote_task_queue, shared_conn=True)
         self.remote_receiver.add_listener(self.dispatch_task,[settings.PROCESSOR_TASK_REMOTE_RK])
         
         self.local_sender = Sender(local_binder)
-        self.local_receiver = Receiver(local_binder, queue = local_queue)
+        self.local_receiver = Receiver(local_binder, queue = local_queue, shared_conn=True)
         self.local_receiver.add_listener(self.dispatch_result,["task_result"])
 
         self.client_manager = ClientManager(local_binder, queue=local_queue)
