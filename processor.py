@@ -2,7 +2,6 @@ import pika
 import threading
 import json
 import time
-import signal
 import settings 
 
 from amqp_conn import *
@@ -13,7 +12,7 @@ class ClientsNotReady(Exception):
     pass
 
 class Processor(Client):
-    def __init__(self, 	remote_binder, local_binder, remote_server_queue, remote_task_queue, local_queue, clients):
+    def __init__(self, 	remote_binder, local_binder, remote_task_queue, local_queue, clients):
 
         self.remote_binder = remote_binder
         self.local_binder = local_binder
@@ -22,25 +21,26 @@ class Processor(Client):
         self.remote_task_queue = remote_task_queue
         self.local_queue = local_queue
 
-        super(Client, self).__init__(binder=remote_binder, queue = remote_server_queue, client_name="processor")
-        super(Client, self).connect(timeout=100.0) # Connect to remote client manager
-
         self.remote_receiver = Receiver(remote_binder, queue = remote_task_queue)
-        self.remote_receiver.add_listener(self.dispatch_task,["task"])
-        self.remote_receiver.start()
-       
+        self.remote_receiver.add_listener(self.dispatch_task,[settings.PROCESSOR_TASK_REMOTE_RK])
+        
         self.local_sender = Sender(local_binder)
         self.local_receiver = Receiver(local_binder, queue = local_queue)
         self.local_receiver.add_listener(self.dispatch_result,["task_result"])
-        self.local_receiver.start()
 
-        self.client_manager = ClientManager(local_binder, queue=local_queue, exch=local_exchange)
+        self.client_manager = ClientManager(local_binder, queue=local_queue)
         self.client_manager.await_clients(clients)
 
         self.pending_tasks = dict() # Set of clients for task_id
         self.task_queue    = dict() # Task data
         self.task_results  = list()  
-        
+
+        super(Processor,self).__init__(binder=remote_binder, queue = remote_server_queue, client_name = settings.PROCESSOR_NAME)
+        super(Processor,self).connect(timeout=settings.PROCESSOR_CONNECT_TIMEOUT) # Connect to remote client manager    
+   
+        self.local_receiver.start()
+        self.remote_receiver.start()
+
 
     def kill(self):
         super(Client, self).kill()
@@ -101,8 +101,7 @@ class Processor(Client):
 					message = json.dumps(self.task_results))
         self.task_results = list()
 
-# ps -ax  | grep processor.py | cut -d " " -f1| xargs -I {} kill -9 {}
-# kilall -9 python 
+# killall -9 python 
 
 
         

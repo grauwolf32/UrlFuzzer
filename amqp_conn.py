@@ -62,6 +62,8 @@ class Receiver(threading.Thread):
                 self.ch.queue_bind(exchange=self.exch, queue=self.queue, routing_key=routing_key)
         return
 
+    #TODO Add method to remove subscription
+
     def run(self):
         self.ch.start_consuming()
 

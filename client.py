@@ -7,7 +7,7 @@ import json
 
 from amqp_conn import *
 
-class Client():
+class Client(object):
     def __init__(self, binder, queue, client_name="", client_id=random.randint(0,10**6)):
         self.binder = binder
         self.queue = queue

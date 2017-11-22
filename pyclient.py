@@ -10,7 +10,7 @@ from client import Client
 
 class PyClient(Client):
     def __init__(self, binder, queue, client_name):
-        Super(Client, self).__init__(binder = binder, queue=queue, client_name=client_name)
+        Super(PyClient, self).__init__(binder = binder, queue=queue, client_name=client_name)
         self.receiver.add_listener(self.process_result,["task"])
 
     def process_task(self, receiver, method, body):
